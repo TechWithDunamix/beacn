@@ -15,6 +15,10 @@ dependencies = [
     "sillo-inertia==0.1.0.dev1",
     "sillo-wire==0.1.0.dev1",
     "aiosqlite>=0.19.0",
+    # The `beacn` console script (cli/) is a runtime entrypoint — `beacn
+    # migrate`, `beacn user`, `beacn doctor` all load cli.client, which uses
+    # httpx for the control-plane API calls. Not optional.
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +28,6 @@ server = ["uvicorn[standard]>=0.30.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
-    "httpx>=0.28",
     "ruff>=0.6",
 ]
 
