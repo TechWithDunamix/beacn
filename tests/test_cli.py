@@ -11,15 +11,23 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 
 
-def _run(args, env_extra=None, input_text=None):
+def _run(args, env_extra=None, input_text=None, env_unset=()):
     import os
 
     env = dict(os.environ)
+    for key in env_unset:
+        env.pop(key, None)
     env.update(env_extra or {})
     return subprocess.run(
         [sys.executable, "-m", "cli", *args],
         cwd=str(REPO), env=env, capture_output=True, text=True, input=input_text, timeout=60,
     )
+
+
+#: conftest sets these on the pytest process to build the in-process app; a
+#: subprocess must not inherit them when the point of the test is the env file.
+_CONFTEST_ENV = ("DATABASE_URL", "SECRET_KEY", "APP_ENV", "DB_GENERATE_SCHEMAS",
+                 "VITE_DEV", "BEACN_BUS", "INGEST_RATE_PER_MINUTE", "INGEST_BURST")
 
 
 @pytest.fixture
@@ -90,6 +98,31 @@ def test_login_required_for_producer_list(db_env):
     r = _run(["producer", "list"], db_env)
     assert r.returncode == 1
     assert "beacn login" in r.stdout
+
+
+def test_cli_loads_beacn_env_file(tmp_path):
+    """A hand-run command with only BEACN_ENV_FILE set must act on the DB that
+    file names, not the built-in SQLite default."""
+    db = tmp_path / "fromfile.db"
+    env_file = tmp_path / "beacn.env"
+    env_file.write_text(
+        "# deployment config\n"
+        f'DATABASE_URL="sqlite://{db}"\n'
+        "export DB_GENERATE_SCHEMAS=true\n"
+        "SECRET_KEY=cli-test-secret-key\n"
+        "APP_ENV=local\n"
+        f"BEACN_HOME={tmp_path / 'home'}\n"
+    )
+    only = {"BEACN_ENV_FILE": str(env_file)}
+
+    assert _run(["migrate"], only, env_unset=_CONFTEST_ENV).returncode == 0
+    made = _run(["user", "create", "boss@example.com", "--role", "Admin", "--admin"],
+                {**only, "BEACN_PASSWORD": "Str0ng!password"}, env_unset=_CONFTEST_ENV)
+    assert made.returncode == 0, made.stdout + made.stderr
+
+    listed = _run(["user", "list"], only, env_unset=_CONFTEST_ENV)
+    assert "boss@example.com" in listed.stdout
+    assert db.exists()  # proves the file's DATABASE_URL was used
 
 
 def test_user_password_reset_via_cli(db_env):

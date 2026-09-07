@@ -24,7 +24,7 @@ sillo release workflows use.
 | Path | What |
 |---|---|
 | `/opt/beacn` | the app + its virtualenv (`.venv`) |
-| `/etc/beacn/beacn.env` | configuration, read by every unit; `SECRET_KEY` generated on first run |
+| `/etc/beacn/beacn.env` | configuration, read by every unit — and auto-loaded by the `beacn` CLI, so `sudo -u beacn beacn …` by hand hits the same database as the service. Override with `BEACN_ENV_FILE=`. |
 | `beacn` (system user) | runs every service; no login shell |
 
 ### systemd units
@@ -47,6 +47,7 @@ systemctl list-timers beacn-work.timer
 
 sudo -u beacn /opt/beacn/.venv/bin/beacn doctor        # config + db + bus check
 sudo -u beacn /opt/beacn/.venv/bin/beacn user create you@example.com --role Admin --admin
+sudo -u beacn /opt/beacn/.venv/bin/beacn user password you@example.com --generate
 ```
 
 ## Reverse proxy

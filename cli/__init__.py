@@ -7,11 +7,50 @@ tokens into the registered name and hands everything else back to the framework.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+
+def _load_env_file() -> None:
+    """Populate ``os.environ`` from a deployment env file before config is read.
+
+    Only the systemd units get ``EnvironmentFile=``; a hand-run ``beacn migrate``
+    or ``beacn user create`` would otherwise fall back to the built-in defaults
+    (SQLite, memory bus) and quietly act on a *different* database than the
+    running service. Load ``$BEACN_ENV_FILE`` if set, else ``/etc/beacn/beacn.env``,
+    else ``./.env``. Real environment variables always win (``setdefault``); the
+    first file to define a key wins over later ones.
+    """
+    candidates: list[Path] = []
+    explicit = os.environ.get("BEACN_ENV_FILE")
+    if explicit:
+        candidates.append(Path(explicit))
+    candidates += [Path("/etc/beacn/beacn.env"), Path.cwd() / ".env"]
+    for path in candidates:
+        try:
+            if not path.is_file():
+                continue
+            lines = path.read_text().splitlines()
+        except OSError:
+            continue
+        for raw in lines:
+            line = raw.strip()
+            if line.startswith("export "):
+                line = line[7:].lstrip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+
+
+_load_env_file()
 
 from sillo.console import Command, Console  # noqa: E402
 
