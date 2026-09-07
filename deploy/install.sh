@@ -126,6 +126,12 @@ if [[ $DO_BUILD == 1 ]]; then
   fi
   BUN="$(command -v bun || echo /usr/local/bin/bun)"
   [[ -x "$BUN" ]] || die "bun install failed"
+  # Vite's launcher is `#!/usr/bin/env node`, and some plugins spawn `node`
+  # directly. Point it at bun's node-compatible shim if the box has no Node.
+  if ! command -v node >/dev/null; then
+    ln -sf "$BUN" /usr/local/bin/node
+    log "Linked /usr/local/bin/node -> bun (no system Node present)"
+  fi
 fi
 
 # --------------------------------------------------------------------------
@@ -238,11 +244,12 @@ run_uv pip install --python "$APP_DIR/.venv/bin/python" --prerelease=allow -e ".
 # --------------------------------------------------------------------------
 if [[ $DO_BUILD == 1 ]] && command -v bun >/dev/null; then
   FROZEN=""; [[ -f "$APP_DIR/bun.lock" || -f "$APP_DIR/bun.lockb" ]] && FROZEN="--frozen-lockfile"
-  log "Building the front end (bun install $FROZEN && bun run build)"
-  sudo -u "$APP_USER" env HOME="$APP_DIR" \
+  log "Building the front end (bun install $FROZEN && bun run --bun build)"
+  sudo -u "$APP_USER" env HOME="$APP_DIR" PATH="/usr/local/bin:$PATH" \
     sh -c 'cd "$1" && shift && exec "$@"' _ "$APP_DIR" "$BUN" install $FROZEN
-  sudo -u "$APP_USER" env HOME="$APP_DIR" \
-    sh -c 'cd "$1" && shift && exec "$@"' _ "$APP_DIR" "$BUN" run build
+  # --bun forces bun's runtime for vite instead of letting its shebang find node.
+  sudo -u "$APP_USER" env HOME="$APP_DIR" PATH="/usr/local/bin:$PATH" \
+    sh -c 'cd "$1" && shift && exec "$@"' _ "$APP_DIR" "$BUN" run --bun build
 elif [[ ! -f "$APP_DIR/static/build/.vite/manifest.json" ]]; then
   warn "No front-end build present and Bun is unavailable."
   warn "Re-run without --no-build, or build static/build/ on another host and copy it in."
