@@ -58,8 +58,9 @@ automatic HTTPS, `flush_interval -1` (SSE), and a 24 h upstream read timeout
 
 ## Front end
 
-The built assets (`static/build/`) are **not** committed. `install.sh` builds
-them with `npm ci && npm run build` if Node is on the host; otherwise build on
+The built assets (`static/build/`) are **not** committed. `install.sh` installs
+[Bun](https://bun.sh) (into `/usr/local/bin` if absent) and builds them with
+`bun install && bun run build`; pass `--no-build` to skip it and instead build on
 another machine and `rsync` `static/build/` into `/opt/beacn/`, or run a CI job
 that does it. With `VITE_DEV=false` (the production default) the app serves those
 files; without them the dashboard HTML loads but has no JavaScript.

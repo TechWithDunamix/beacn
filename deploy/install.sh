@@ -10,7 +10,7 @@
 #     Redis and PostgreSQL (skipped if already present)
 #   * creates the `beacn` system user, /opt/beacn and /etc/beacn
 #   * syncs this checkout into /opt/beacn and builds the venv
-#   * builds the front end if Node is available
+#   * builds the front end with Bun if it is available (installed if absent)
 #   * writes /etc/beacn/beacn.env on first run (generates SECRET_KEY); never
 #     overwrites an existing one
 #   * installs the systemd units, runs migrations, starts the web tier and the
@@ -21,7 +21,7 @@
 #   --postgres         install + enable a local PostgreSQL, create the beacn DB
 #   --caddy            install Caddy (reverse proxy; config left to you)
 #   --all              --redis --postgres --caddy
-#   --no-build         skip the front-end build even if Node is present
+#   --no-build         skip the front-end build even if Bun is present
 #   --app-dir DIR      install location (default /opt/beacn)
 #   --user NAME        service account (default beacn)
 #   --domain HOST      write APP_URL / CORS_ORIGINS for this host on first run
@@ -94,9 +94,9 @@ pm_install() {
 log "Installing base prerequisites"
 if [[ $PM == apt ]]; then
   apt_wait; apt-get update -qq
-  pm_install python3 python3-venv python3-dev build-essential git curl ca-certificates rsync openssl
+  pm_install python3 python3-venv python3-dev build-essential git curl ca-certificates rsync openssl unzip
 else
-  pm_install python3 python3-devel gcc gcc-c++ make git curl ca-certificates rsync openssl
+  pm_install python3 python3-devel gcc gcc-c++ make git curl ca-certificates rsync openssl unzip
 fi
 PYTHON="$(command -v python3.13 || command -v python3.12 || command -v python3.11 || command -v python3)"
 "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
@@ -114,6 +114,19 @@ else
 fi
 UV="$(command -v uv || echo /usr/local/bin/uv)"
 [[ -x "$UV" ]] || die "uv install failed"
+
+# Bun builds the front end (bun install && bun run build). Installed system-wide
+# into /usr/local/bin so the service account can reach it. Skipped with --no-build.
+if [[ $DO_BUILD == 1 ]]; then
+  if command -v bun >/dev/null; then
+    log "bun already installed ($(bun --version))"
+  else
+    log "Installing bun into /usr/local/bin"
+    curl -fsSL https://bun.sh/install | env BUN_INSTALL=/usr/local bash
+  fi
+  BUN="$(command -v bun || echo /usr/local/bin/bun)"
+  [[ -x "$BUN" ]] || die "bun install failed"
+fi
 
 # --------------------------------------------------------------------------
 # Redis
@@ -223,12 +236,16 @@ run_uv pip install --python "$APP_DIR/.venv/bin/python" --prerelease=allow -e ".
 # --------------------------------------------------------------------------
 # front end
 # --------------------------------------------------------------------------
-if [[ $DO_BUILD == 1 ]] && command -v npm >/dev/null; then
-  log "Building the front end (npm ci && npm run build)"
-  ( cd "$APP_DIR" && sudo -u "$APP_USER" npm ci --silent && sudo -u "$APP_USER" npm run build --silent )
+if [[ $DO_BUILD == 1 ]] && command -v bun >/dev/null; then
+  FROZEN=""; [[ -f "$APP_DIR/bun.lock" || -f "$APP_DIR/bun.lockb" ]] && FROZEN="--frozen-lockfile"
+  log "Building the front end (bun install $FROZEN && bun run build)"
+  sudo -u "$APP_USER" env HOME="$APP_DIR" \
+    sh -c 'cd "$1" && shift && exec "$@"' _ "$APP_DIR" "$BUN" install $FROZEN
+  sudo -u "$APP_USER" env HOME="$APP_DIR" \
+    sh -c 'cd "$1" && shift && exec "$@"' _ "$APP_DIR" "$BUN" run build
 elif [[ ! -f "$APP_DIR/static/build/.vite/manifest.json" ]]; then
-  warn "No front-end build present and Node is unavailable."
-  warn "Install Node and re-run, or build static/build/ on another host and copy it in."
+  warn "No front-end build present and Bun is unavailable."
+  warn "Re-run without --no-build, or build static/build/ on another host and copy it in."
   warn "Until then the dashboard HTML loads but has no JavaScript."
 fi
 
