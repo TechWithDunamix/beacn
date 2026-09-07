@@ -1,0 +1,25 @@
+# Optional reverse proxy with automatic HTTPS. Put at /etc/caddy/Caddyfile
+# (or import it), then `systemctl reload caddy`.
+#
+# WebSockets (/realtime) and SSE (/api/v1/sse) pass through unchanged —
+# Caddy's reverse_proxy handles Upgrade and streams SSE without buffering.
+
+beacn.example.com {
+	encode zstd gzip
+
+	# Long-lived connections: keep the upstream read timeout generous.
+	reverse_proxy 127.0.0.1:8000 {
+		# If you run beacn-web@ instances instead of uvicorn --workers:
+		# reverse_proxy 127.0.0.1:8000 127.0.0.1:8001 127.0.0.1:8002 {
+		flush_interval -1          # never buffer — required for SSE
+		transport http {
+			read_timeout 24h        # WebSocket / SSE stay open
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+}

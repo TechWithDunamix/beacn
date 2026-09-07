@@ -1,0 +1,7 @@
+[Unit]
+Description=BEACN event infrastructure (web + maintenance)
+Wants=beacn-web.service beacn-work.timer
+After=beacn-web.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run BEACN maintenance jobs every 2 minutes
+PartOf=beacn.target
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+# Do not pile up runs if one is slow.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

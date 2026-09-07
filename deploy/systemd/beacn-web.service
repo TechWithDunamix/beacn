@@ -1,0 +1,38 @@
+[Unit]
+Description=BEACN web tier (event ingestion, control plane, realtime)
+After=network-online.target beacn-migrate.service postgresql.service redis-server.service
+Wants=network-online.target
+Requires=beacn-migrate.service
+PartOf=beacn.target
+
+[Service]
+Type=exec
+User=beacn
+Group=beacn
+WorkingDirectory=/opt/beacn
+EnvironmentFile=/etc/beacn/beacn.env
+
+# One uvicorn master with N worker processes. Each worker is an independent
+# event loop; the Redis bus (BEACN_BUS=redis) ties them and any other hosts
+# together, so this scales the same way adding machines does.
+ExecStart=/opt/beacn/.venv/bin/uvicorn app.main:app \
+    --host ${BEACN_HOST} --port ${BEACN_PORT} \
+    --workers ${BEACN_WEB_WORKERS} \
+    --proxy-headers --forwarded-allow-ips '*' \
+    --timeout-graceful-shutdown 20
+
+# SIGTERM lets each worker send close(1001) to its sockets and drain the bus.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/opt/beacn/storage
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
