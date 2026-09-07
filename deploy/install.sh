@@ -85,6 +85,18 @@ PYTHON="$(command -v python3.13 || command -v python3.12 || command -v python3.1
   || die "Python >= 3.11 required, found $($PYTHON -V)"
 log "Using $($PYTHON -V) at $PYTHON"
 
+# uv builds the venv and installs the project — the same tool the sillo release
+# workflows use. Installed system-wide so every account can reach it.
+if command -v uv >/dev/null; then
+  log "uv already installed ($(uv --version))"
+else
+  log "Installing uv into /usr/local/bin"
+  curl -LsSf https://astral.sh/uv/install.sh \
+    | env UV_INSTALL_DIR=/usr/local/bin INSTALLER_NO_MODIFY_PATH=1 sh
+fi
+UV="$(command -v uv || echo /usr/local/bin/uv)"
+[[ -x "$UV" ]] || die "uv install failed"
+
 # --------------------------------------------------------------------------
 # Redis
 # --------------------------------------------------------------------------
@@ -163,18 +175,19 @@ mkdir -p "$APP_DIR" "/etc/$APP" "$APP_DIR/storage"
 # --------------------------------------------------------------------------
 log "Syncing $SRC -> $APP_DIR"
 rsync -a --delete \
-  --exclude '.git' --exclude '.venv' --exclude 'node_modules' \
+  --exclude '.git' --exclude '.venv' --exclude '.cache' --exclude 'node_modules' \
   --exclude 'storage/*.db*' --exclude 'examples/keys.json' --exclude '__pycache__' \
   "$SRC"/ "$APP_DIR"/
+install -d -o "$APP_USER" -g "$APP_USER" "$APP_DIR/.cache"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 # --------------------------------------------------------------------------
-# venv
+# venv (uv)
 # --------------------------------------------------------------------------
-log "Building the virtualenv and installing beacn[$PY_EXTRAS]"
-sudo -u "$APP_USER" "$PYTHON" -m venv "$APP_DIR/.venv"
-sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -q --upgrade pip
-sudo -u "$APP_USER" "$APP_DIR/.venv/bin/pip" install -q --pre -e "$APP_DIR[$PY_EXTRAS]"
+log "Building the virtualenv with uv and installing beacn[$PY_EXTRAS]"
+run_uv() { sudo -u "$APP_USER" env HOME="$APP_DIR" UV_CACHE_DIR="$APP_DIR/.cache/uv" "$UV" "$@"; }
+run_uv venv --python "$PYTHON" "$APP_DIR/.venv"
+run_uv pip install --python "$APP_DIR/.venv/bin/python" --prerelease=allow -e "$APP_DIR[$PY_EXTRAS]"
 
 # --------------------------------------------------------------------------
 # front end

@@ -15,6 +15,10 @@ switches the env file to the single-process in-memory bus.
 
 The script is **idempotent** — to upgrade, `git pull` and run it again.
 
+It uses [uv](https://docs.astral.sh/uv/) for the virtualenv and dependency
+install (installing uv into `/usr/local/bin` if absent) — the same tool the
+sillo release workflows use.
+
 ## What gets installed
 
 | Path | What |
