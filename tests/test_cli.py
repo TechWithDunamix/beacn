@@ -90,3 +90,28 @@ def test_login_required_for_producer_list(db_env):
     r = _run(["producer", "list"], db_env)
     assert r.returncode == 1
     assert "beacn login" in r.stdout
+
+
+def test_user_password_reset_via_cli(db_env):
+    assert _run(["migrate"], db_env).returncode == 0
+    pw = {**db_env, "BEACN_PASSWORD": "Str0ng!password"}
+    assert _run(["user", "create", "boss@example.com", "--role", "Admin", "--admin"], pw).returncode == 0
+
+    # --password: explicit, no prompt.
+    r = _run(["user", "password", "boss@example.com", "--password", "An0ther!Secret"], db_env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "Password changed" in r.stdout
+
+    # --generate: prints a fresh password once.
+    r = _run(["user", "password", "boss@example.com", "--generate"], db_env)
+    assert r.returncode == 0
+    assert "New password:" in r.stdout
+
+    # too short is rejected.
+    r = _run(["user", "password", "boss@example.com", "--password", "short"], db_env)
+    assert r.returncode == 1
+    assert "at least 10" in (r.stdout + r.stderr)
+
+    # unknown account is a clean error.
+    r = _run(["user", "password", "nobody@example.com", "--password", "An0ther!Secret"], db_env)
+    assert r.returncode == 1

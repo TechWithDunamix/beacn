@@ -11,14 +11,16 @@ requires-python = ">=3.11"
 dependencies = [
     # Sillo is the whole framework layer: routing, middleware, sessions, auth,
     # RBAC, the Record ORM, migrations, the console, the queue, WebSockets.
-    "sillo-framework[cache,hashing-bcrypt,record]==0.3.2.dev1",
+    # `jwt` is required at runtime — app.auth mints realtime tokens with it.
+    "sillo-framework[cache,hashing-bcrypt,record,jwt]==0.3.2.dev1",
     "sillo-inertia==0.1.0.dev1",
     "sillo-wire==0.1.0.dev1",
     "aiosqlite>=0.19.0",
     # The `beacn` console script (cli/) is a runtime entrypoint — `beacn
     # migrate`, `beacn user`, `beacn doctor` all load cli.client, which uses
-    # httpx for the control-plane API calls. Not optional.
-    "httpx>=0.28",
+    # httpx for the control-plane API calls. Not optional. Cap below 1.0 — the
+    # 1.0 dev line drops httpx.ASGITransport, which the test client needs.
+    "httpx>=0.28,<1",
 ]
 
 [project.optional-dependencies]

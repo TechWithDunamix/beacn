@@ -14,6 +14,9 @@ Namespaced `beacn user <verb>` to match the rest of the CLI (`producer create`,
 
 from __future__ import annotations
 
+import secrets
+import string
+
 from sillo.console import Argument, Flag, Option
 from sillo.users import commands as accounts
 
@@ -24,6 +27,16 @@ from cli.commands import LocalCommand
 __all__ = ["USER_COMMANDS"]
 
 ROLE_NAMES = list(ROLES)  # Admin, Operator, Developer, ReadOnly
+
+
+def _generate_password(length: int = 20) -> str:
+    """A strong random password with at least one lower, upper and digit."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*-_=+"
+    while True:
+        pw = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (any(c.islower() for c in pw) and any(c.isupper() for c in pw)
+                and any(c.isdigit() for c in pw)):
+            return pw
 
 
 def _norm_email(raw: str) -> str:
@@ -158,18 +171,47 @@ class UserShow(LocalCommand):
 
 class UserPassword(LocalCommand):
     name = "user password"
-    help = "Change an operator's password."
-    arguments = [Argument("identifier", help="Email address."), Flag("json")]
+    help = "Change or reset an operator's password."
+    arguments = [
+        Argument("identifier", help="Email address."),
+        Option("password", default="", help="New password (skips the prompt)."),
+        Flag("generate", help="Generate a strong random password and print it once."),
+        Flag("json"),
+    ]
 
     async def run_async(self) -> int:
         from database.models import User
 
-        password = self.read_password("New password")
+        generated = self.flag("generate")
+        if generated:
+            if self.option("password"):
+                raise CliError("--password and --generate are mutually exclusive.")
+            password = _generate_password()
+        elif self.option("password"):
+            password = self.option("password")
+        else:
+            # Hidden prompt, or BEACN_PASSWORD / SILLO_PASSWORD when non-interactive.
+            password = self.read_password("New password")
+
+        if len(password) < 10:
+            raise CliError("Password must be at least 10 characters.")
+
         try:
             await accounts.set_password(self.argument("identifier"), password, model=User)
         except (LookupError, ValueError) as error:
             raise CliError(str(error)) from error
+
+        if self.json_out:
+            self.emit({
+                "identifier": self.argument("identifier"),
+                "password": password if generated else None,
+            })
+            return 0
         self.success("Password changed.")
+        if generated:
+            self.blank()
+            self.line(f"  New password: {password}")
+            self.muted("  Shown once — copy it now.")
         return 0
 
 
