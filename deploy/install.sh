@@ -66,16 +66,28 @@ if   command -v apt-get >/dev/null; then PM=apt
 elif command -v dnf     >/dev/null; then PM=dnf
 else die "need apt-get or dnf"; fi
 
+# A fresh Ubuntu box runs unattended-upgrades on boot and holds the dpkg lock
+# for a few minutes. Wait it out rather than failing the install half way.
+apt_wait() {
+  [[ $PM == apt ]] || return 0
+  local waited=0
+  while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
+              /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; do
+    (( waited == 0 )) && log "Waiting for another apt/dpkg process (unattended-upgrades?) to release the lock…"
+    waited=1; sleep 5
+  done
+}
+
 pm_install() {
   case $PM in
-    apt) DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@";;
+    apt) apt_wait; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@";;
     dnf) dnf install -y "$@";;
   esac
 }
 
 log "Installing base prerequisites"
 if [[ $PM == apt ]]; then
-  apt-get update -qq
+  apt_wait; apt-get update -qq
   pm_install python3 python3-venv python3-dev build-essential git curl ca-certificates rsync openssl
 else
   pm_install python3 python3-devel gcc gcc-c++ make git curl ca-certificates rsync openssl
@@ -127,10 +139,15 @@ if [[ $DO_PG == 1 ]]; then
   fi
   systemctl enable --now postgresql
   log "Ensuring the beacn role and database exist"
+  # Set the password every run (CREATE if missing, else ALTER) so the URL this
+  # script writes always matches the role — a re-run after a failed first run
+  # must not leave them out of sync.
   DB_PASS="$(openssl rand -hex 16)"
-  sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL || true
+  sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$ BEGIN
-  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'beacn') THEN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'beacn') THEN
+    ALTER ROLE beacn LOGIN PASSWORD '${DB_PASS}';
+  ELSE
     CREATE ROLE beacn LOGIN PASSWORD '${DB_PASS}';
   END IF;
 END \$\$;
@@ -152,7 +169,7 @@ if [[ $DO_CADDY == 1 ]]; then
       pm_install debian-keyring debian-archive-keyring apt-transport-https
       curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
       curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
-      apt-get update -qq && pm_install caddy
+      apt_wait; apt-get update -qq && pm_install caddy
     else
       dnf install -y 'dnf-command(copr)' && dnf copr enable -y @caddy/caddy && pm_install caddy
     fi
@@ -207,6 +224,8 @@ fi
 ENV_FILE="/etc/$APP/$APP.env"
 if [[ -f "$ENV_FILE" ]]; then
   log "Keeping existing $ENV_FILE"
+  # ...but if --postgres just rotated the local DB password, keep the URL in sync.
+  [[ -n "${NEW_DATABASE_URL:-}" ]] && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${NEW_DATABASE_URL}|" "$ENV_FILE"
 else
   log "Writing $ENV_FILE (first run)"
   install -m 0640 -o root -g "$APP_USER" "$APP_DIR/deploy/$APP.env.example" "$ENV_FILE"
