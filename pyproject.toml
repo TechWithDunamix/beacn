@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beacn"
+version = "0.1.0"
+description = "Centralized realtime event, task, notification and message infrastructure for backend applications"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # Sillo is the whole framework layer: routing, middleware, sessions, auth,
+    # RBAC, the Record ORM, migrations, the console, the queue, WebSockets.
+    "sillo-framework[cache,hashing-bcrypt,record]==0.3.2.dev1",
+    "sillo-inertia==0.1.0.dev1",
+    "sillo-wire==0.1.0.dev1",
+    "aiosqlite>=0.19.0",
+]
+
+[project.optional-dependencies]
+redis = ["redis>=5.0.0"]
+postgres = ["asyncpg>=0.29.0"]
+server = ["uvicorn[standard]>=0.30.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+beacn = "cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "domain", "database", "routes", "realtime", "observability", "integrations", "cli"]
+
+[tool.pytest.ini_options]
+# The SDK suite lives under sdk/python/tests and is run separately (it starts a
+# real uvicorn server); collecting both trees at once clashes on the package
+# name `tests`.
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["database/migrations", "sdk/typescript"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["E402"]
+# The SDK targets Python 3.8 (no `X | Y`, uses `# type:` comments) and
+# deliberately re-raises structured errors after exhausting retries.
+"sdk/python/beacn.py" = ["UP", "B904"]

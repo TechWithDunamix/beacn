@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .
+
+  backend:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          # Prefer the local Sillo checkout when this repo sits beside it;
+          # fall back to the published packages otherwise.
+          pip install -e ../core -e ../inertia -e ../sillo-wire 2>/dev/null || \
+            pip install sillo-framework sillo-inertia sillo-wire
+          pip install -e ".[dev,redis]"
+      - name: Backend tests
+        run: pytest -q
+      - name: Bus tests against real Redis
+        env:
+          REDIS_TEST_URL: redis://localhost:6379/0
+        run: pytest tests/test_bus.py -q
+
+  python-sdk:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Import + syntax check on the target interpreter
+        run: |
+          python -c "import ast; ast.parse(open('sdk/python/beacn.py').read()); print('parses on', __import__('sys').version)"
+          cd sdk/python && python -c "import beacn; print(beacn.__version__)"
+      - name: SDK integration tests (server runs on 3.11+ only)
+        if: ${{ matrix.python != '3.8' && matrix.python != '3.9' && matrix.python != '3.10' }}
+        run: |
+          pip install -e ../core -e ../inertia -e ../sillo-wire 2>/dev/null || \
+            pip install sillo-framework sillo-inertia sillo-wire
+          pip install -e ".[dev]" "beacn[all] @ file://$(pwd)/sdk/python" uvicorn websockets
+          pytest sdk/python/tests -q -o testpaths=sdk/python/tests
+
+  typescript-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: sdk/typescript
+        run: |
+          npm ci || npm install
+          npm run build
+          npm test
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci || npm install
+      - run: npm run typecheck
+      - run: npm run build

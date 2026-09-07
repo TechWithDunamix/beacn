@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv*/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Database / storage
+storage/*.db
+storage/*.db-*
+storage/*.log
+*.sqlite3
+
+# Node / frontend
+node_modules/
+static/build/
+sdk/typescript/dist/
+sdk/typescript/dist-test/
+sdk/typescript/node_modules/
+
+# Local config
+.env
+.env.local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Example producer credentials (contains live API key secrets)
+examples/keys.json

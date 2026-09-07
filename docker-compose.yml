@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: beacn
+      POSTGRES_PASSWORD: beacn
+      POSTGRES_DB: beacn
+    ports: ["5432:5432"]
+    volumes: ["beacn-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beacn"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["python", "-m", "cli", "migrate"]
+    environment: &env
+      APP_ENV: production
+      APP_DEBUG: "false"
+      SECRET_KEY: compose-dev-secret-change-me
+      COOKIE_SECURE: "false"
+      DATABASE_URL: postgres://beacn:beacn@db:5432/beacn
+      DB_GENERATE_SCHEMAS: "true"
+      BEACN_BUS: redis
+      QUEUE_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  web:
+    build: .
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *env
+      DB_GENERATE_SCHEMAS: "false"
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    deploy:
+      replicas: 2
+
+  worker:
+    build: .
+    command: ["sh", "-c", "while true; do python -m cli work; sleep 120; done"]
+    environment:
+      <<: *env
+      DB_GENERATE_SCHEMAS: "false"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  beacn-db:

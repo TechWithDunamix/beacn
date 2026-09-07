@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beacn"
+version = "0.1.0"
+description = "Official Python SDK for BEACN — realtime event infrastructure"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [{ name = "BEACN" }]
+keywords = ["events", "realtime", "websocket", "sse", "infrastructure", "beacn"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+async = ["httpx>=0.24"]
+websocket = ["websockets>=11"]
+all = ["httpx>=0.24", "websockets>=11"]
+dev = ["pytest>=7", "pytest-asyncio>=0.21", "httpx>=0.24", "websockets>=11", "uvicorn>=0.23"]
+
+[tool.hatch.build.targets.wheel]
+# One file, deliberately.
+include = ["beacn.py"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"beacn.py" = "beacn.py"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

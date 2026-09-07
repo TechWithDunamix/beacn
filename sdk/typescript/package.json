@@ -1,0 +1,28 @@
+{
+  "name": "@beacn/client",
+  "version": "0.1.0",
+  "description": "Official BEACN browser/client SDK — realtime events over WebSocket",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\""
+  },
+  "keywords": ["beacn", "events", "realtime", "websocket", "sse"],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "ws": "^8.18.0",
+    "@types/ws": "^8.5.10"
+  }
+}

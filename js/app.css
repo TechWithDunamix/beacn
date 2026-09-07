@@ -1,0 +1,420 @@
+/**
+ * Janus design tokens.
+ *
+ * The structure, the geometry and the component vocabulary are the commerce
+ * dashboard's, unchanged: the same four-step radius scale, the same hairline
+ * borders, the same nav, row and skeleton treatments. **Only the colours
+ * differ**, and they are taken from nobus.io — a vivid blue (#0664f7), a deep
+ * navy ink (#000026), a blue-tinted canvas (#f9fafe), light blue hairlines,
+ * and their green and orange for state.
+ *
+ * That split is the whole point of the file. Components name semantic tokens —
+ * `surface`, `line`, `ink-muted`, `critical` — never a hue, so re-skinning the
+ * application is editing this one block rather than forty screens.
+ *
+ * Two things about the palette worth knowing:
+ *
+ * - **Every neutral carries blue in it.** nobus's greys are not grey; the
+ *   canvas is #f9fafe and the hairlines are a pale blue. Mixing a true grey in
+ *   beside them reads as dirty, so there is no true grey in this file.
+ * - **Text weights are checked against the surface they sit on.** `ink-muted`
+ *   and `ink-faint` both clear 4.5:1 on `surface` and on `canvas`; the state
+ *   hues are the darker of nobus's two greens and a derived red, because their
+ *   brightest green (#03a731) is a 3:1 colour and fails as body text.
+ */
+
+@import 'tailwindcss';
+
+@custom-variant dark {
+  /* Both the explicit choice and the system preference, so `dark:` utilities
+     and the tokens below can never disagree about which mode is active. */
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme='light']), :not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}
+
+@theme {
+  /* -- Accent -----------------------------------------------------------
+     nobus's blue. `brand` is what a link and an active nav item are drawn
+     in; `strong` is the deeper blue they use for a pressed or filled state. */
+  --color-brand: #0664f7;
+  --color-brand-strong: #0332a0;
+  --color-brand-soft: #eef4ff;
+  --color-brand-ring: rgb(6 100 247 / 0.32);
+
+  /* nobus's near-black is a *navy*, not a charcoal — #000026 — which keeps it
+     in the same family as the accent instead of reading as a neutral dropped
+     in from elsewhere. This is a *text* colour: it inverts in dark mode. */
+  --color-ink: #000026;
+  --color-ink-soft: #0a0a23;
+
+  /* -- Filled controls --------------------------------------------------
+     A background and the colour that sits on it, as a pair.
+     
+     These exist because `ink` does not work as a button background. `ink` is
+     the body-text colour and it inverts — near-black in light mode, near-white
+     in dark — so `bg-ink text-white` is a dark button with white text in one
+     mode and a *white button with white text* in the other. That is exactly
+     what happened before these tokens existed.
+     
+     A filled surface and its foreground have to be defined together, per mode,
+     or the pairing cannot be guaranteed. Both values below clear 5:1 against
+     `on-primary`. */
+  --color-primary: #0664f7;
+  --color-primary-hover: #0332a0;
+  --color-on-primary: #ffffff;
+
+  /* -- Page and hairlines -----------------------------------------------
+     Blue-tinted, like theirs. A true grey beside these reads as dirty. */
+  --color-canvas: #f9fafe;
+  --color-line: #e3eaf7;
+  --color-line-soft: #eef2fb;
+
+  /* The surfaces things sit on: the white a card is drawn on, and the tint a
+     hover or an inset well takes. */
+  --color-surface: #ffffff;
+  --color-sunken: #f4f7fd;
+
+  /* -- Ink, in three weights --------------------------------------------
+     Body copy, secondary, and caption. Anything quieter than `faint` is not
+     worth putting on the page. */
+  --color-ink-muted: #515f85;
+  /* Dark enough to carry 11px uppercase text. #7286ad reads better as a
+     decorative grey and only reaches 3.7:1 on white — which fails the section
+     headings in the sidebar and every `eyebrow` label, all of which are small.
+     A caption nobody can read is not a quieter caption. */
+  --color-ink-faint: #647596;
+
+  /* -- State ------------------------------------------------------------
+     Reserved: these mean a condition, never a series. `ok` is nobus's darker
+     green rather than their brightest, which is a 3:1 colour and fails as
+     text. `abnormal` is their orange. */
+  --color-ok: #0a7539;
+  --color-ok-soft: #e8f7ee;
+  --color-caution: #a04a08;
+  --color-caution-soft: #fdf3e7;
+  --color-abnormal: #ff5f00;
+  --color-abnormal-soft: #fff0e6;
+  --color-critical: #d92d20;
+  --color-critical-soft: #fdecea;
+
+  /* -- Series -----------------------------------------------------------
+     For a chart with more than one line. Built out from nobus's blue so a
+     multi-series chart still reads as one palette. Ordered so the first two
+     are the most distinguishable pair — most charts here have exactly two. */
+  --color-series-1: #0664f7;
+  --color-series-2: #00a3b4;
+  --color-series-3: #6884c2;
+  --color-series-4: #0b8441;
+  --color-series-5: #ff5f00;
+  --color-series-6: #7c3aed;
+
+  /* Aliases the inherited components were written against. Pointed at the
+     real tokens rather than chased out of forty files. */
+  --color-accent: var(--color-brand);
+  --color-accent-soft: var(--color-brand-soft);
+  --color-accent-line: var(--color-brand-ring);
+  --color-positive: var(--color-ok);
+  --color-positive-soft: var(--color-ok-soft);
+  --color-info: var(--color-brand);
+  --color-info-soft: var(--color-brand-soft);
+
+  /* -- Geometry ---------------------------------------------------------
+     Commerce's scale, unchanged. `radius` is a card, `sm` a control, `xs` a
+     chip or a swatch, and `lg` a modal — the only thing large enough to want
+     more. */
+  --radius: 1.1rem;
+  --radius-lg: 1.4rem;
+  --radius-md: 0.9rem;
+  --radius-sm: 0.7rem;
+  --radius-xs: 0.45rem;
+
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+}
+
+/*
+ * `color-scheme` sits outside any layer, on purpose.
+ *
+ * Tailwind orders `theme` before `base`, so a `color-scheme: dark` declared in
+ * the theme layer loses to `html { color-scheme: light dark }` in base — and
+ * the scrollbars and every native control stay light on a dark page.
+ * Unlayered rules beat layered ones regardless of order.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+@layer theme {
+  /*
+   * Dark mode, built from nobus's own darks (#000026, #030612, #0a0a23)
+   * rather than by inverting the light palette.
+   *
+   * Two deliberate choices. The canvas is a very dark *navy*, not black:
+   * black with white text vibrates on an OLED panel and makes hairlines
+   * disappear, and the hairlines are what carries this layout. And the accent
+   * lifts — #0664f7 is legible on white and muddy on near-black, and it is
+   * the colour every link and active state is drawn in.
+   */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --color-canvas: #030612;
+      --color-surface: #0a1024;
+      --color-sunken: #131b33;
+      --color-line: #1e2745;
+      --color-line-soft: #161e38;
+
+      --color-ink: #e7ecfa;
+      --color-ink-soft: #f4f7ff;
+      --color-ink-muted: #9aabcf;
+      --color-ink-faint: #6b7da6;
+
+      --color-brand: #4d94ff;
+      /* A *darker* blue than the accent, because white sits on it:
+         #4d94ff reaches only 2.5:1 against white, #2563eb reaches 5.2:1. */
+      --color-primary: #2563eb;
+      --color-primary-hover: #1d4ed8;
+      --color-on-primary: #ffffff;
+      --color-brand-strong: #7db0ff;
+      --color-brand-soft: #10224a;
+      --color-brand-ring: rgb(77 148 255 / 0.4);
+
+      /* Only the washes move. A 96%-lightness tint is invisible on a dark
+         ground; the state hues themselves mean a condition and do not change,
+         though each lifts just enough to stay legible. */
+      --color-ok: #2bb673;
+      --color-ok-soft: #0b2a1c;
+      --color-caution: #e0913a;
+      --color-caution-soft: #2c1f0c;
+      --color-abnormal: #ff7a2f;
+      --color-abnormal-soft: #2e1608;
+      --color-critical: #f2645a;
+      --color-critical-soft: #2e1210;
+
+      --color-series-1: #4d94ff;
+      --color-series-2: #2ac4d6;
+      --color-series-3: #8ea6dd;
+      --color-series-4: #2bb673;
+      --color-series-5: #ff7a2f;
+      --color-series-6: #a78bfa;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --color-canvas: #030612;
+    --color-surface: #0a1024;
+    --color-sunken: #131b33;
+    --color-line: #1e2745;
+    --color-line-soft: #161e38;
+
+    --color-ink: #e7ecfa;
+    --color-ink-soft: #f4f7ff;
+    --color-ink-muted: #9aabcf;
+    --color-ink-faint: #6b7da6;
+
+    --color-brand: #4d94ff;
+    /* A *darker* blue than the accent, because white sits on it:
+       #4d94ff reaches only 2.5:1 against white, #2563eb reaches 5.2:1. */
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --color-on-primary: #ffffff;
+    --color-brand-strong: #7db0ff;
+    --color-brand-soft: #10224a;
+    --color-brand-ring: rgb(77 148 255 / 0.4);
+
+    --color-ok: #2bb673;
+    --color-ok-soft: #0b2a1c;
+    --color-caution: #e0913a;
+    --color-caution-soft: #2c1f0c;
+    --color-abnormal: #ff7a2f;
+    --color-abnormal-soft: #2e1608;
+    --color-critical: #f2645a;
+    --color-critical-soft: #2e1210;
+
+    --color-series-1: #4d94ff;
+    --color-series-2: #2ac4d6;
+    --color-series-3: #8ea6dd;
+    --color-series-4: #2bb673;
+    --color-series-5: #ff7a2f;
+    --color-series-6: #a78bfa;
+  }
+
+  /* And the explicit light choice, so it holds on a machine set to dark. */
+  :root[data-theme='light'] {
+    color-scheme: light;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink-muted);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv05', 'ss01';
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+
+  a {
+    @apply text-inherit;
+  }
+
+  /* A reference — a route path, a CIDR, a key prefix, a checksum. */
+  .id,
+  .mono {
+    @apply font-mono text-[0.85em] tracking-tight;
+  }
+
+  /* Numbers in a column must line up, or a column of latencies cannot be
+     scanned for the outlier that is the only reason it is there. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hair {
+    @apply border-line;
+  }
+
+  ::selection {
+    /* One rule, both modes: `--color-brand-soft` is already a pale wash in
+       light and a deep tint in dark, so the selection follows the theme
+       without a second selector that has to be kept in step. */
+    background: var(--color-brand-soft);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+
+  /* Anyone who has asked not to see motion gets none of it. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* White card, large radius, whisper-thin border, no shadow by default. */
+  .surface,
+  .panel {
+    @apply rounded-[var(--radius)] border border-line bg-surface;
+  }
+
+  .surface-muted {
+    @apply rounded-[var(--radius)] bg-sunken;
+  }
+
+  /* The only two shadows in the system, both for things genuinely above the
+     page. Cards get a border instead. Tinted with the navy rather than black,
+     so a shadow on this canvas does not read as grey. */
+  .card-shadow {
+    box-shadow:
+      0 1px 2px rgb(0 0 38 / 0.04),
+      0 12px 32px -12px rgb(0 0 38 / 0.16);
+  }
+  .modal-shadow {
+    box-shadow:
+      0 1px 3px rgb(0 0 38 / 0.07),
+      0 24px 56px -16px rgb(0 0 38 / 0.26);
+  }
+
+  /* Section labels — signposts, not content. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint;
+  }
+
+  /* One focus ring, everywhere, and only for keyboard users. Removing it is
+     the accessibility mistake; showing it on every mouse click is the
+     aesthetic one. */
+  .ring-focus {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand;
+  }
+
+  /* Sidebar links. The active item is marked by a short blue bar as well as a
+     wash, which keeps a long nav from reading as a stack of buttons. */
+  .nav-heading {
+    @apply mb-1 px-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint;
+  }
+
+  .nav-link {
+    @apply relative flex items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-[13px]
+           font-medium text-ink-muted transition
+           hover:bg-sunken hover:text-ink;
+  }
+  .nav-link[data-active='true'] {
+    @apply bg-brand-soft text-brand;
+  }
+  .nav-link[data-active='true']::before {
+    content: '';
+    @apply absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-brand;
+  }
+  .nav-link svg {
+    @apply opacity-80;
+  }
+  .nav-link[data-active='true'] svg {
+    @apply opacity-100;
+  }
+
+  /* Table rows. The hover is barely there on purpose — enough to track which
+     row the cursor is on, not enough to read as a selection. */
+  .row-hover {
+    @apply transition-colors hover:bg-sunken/70;
+  }
+
+  /* The status dot beside a gateway, a target or a route. Sized to sit on the
+     baseline of 13px text without shifting it. */
+  .dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex: none;
+  }
+
+  /* A shimmer, not a spinner: the shape of what is coming is more informative
+     than the fact that something is. */
+  .skeleton {
+    @apply rounded-[var(--radius-sm)];
+    background: linear-gradient(
+      90deg,
+      var(--color-sunken) 25%,
+      var(--color-line) 37%,
+      var(--color-sunken) 63%
+    );
+    background-size: 400% 100%;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0 50%;
+    }
+  }
+}
