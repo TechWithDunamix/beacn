@@ -25,13 +25,14 @@
 #   --app-dir DIR      install location (default /opt/beacn)
 #   --user NAME        service account (default beacn)
 #   --domain HOST      write APP_URL / CORS_ORIGINS for this host on first run
+#   --port N           listen port for beacn-web (default 8000)
 #
 set -euo pipefail
 
 APP=beacn
 APP_DIR=/opt/beacn
 APP_USER=beacn
-DO_REDIS=0 DO_PG=0 DO_CADDY=0 DO_BUILD=1 DOMAIN=""
+DO_REDIS=0 DO_PG=0 DO_CADDY=0 DO_BUILD=1 DOMAIN="" PORT=""
 PY_EXTRAS="server,redis,postgres"
 
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -50,7 +51,8 @@ while [[ $# -gt 0 ]]; do
     --app-dir) APP_DIR="$2"; shift;;
     --user) APP_USER="$2"; shift;;
     --domain) DOMAIN="$2"; shift;;
-    -h|--help) sed -n '2,40p' "$0"; exit 0;;
+    --port) PORT="$2"; shift;;
+    -h|--help) sed -n '2,42p' "$0"; exit 0;;
     *) die "unknown flag: $1";;
   esac
   shift
@@ -240,10 +242,13 @@ else
   sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" "$ENV_FILE"
   [[ -n "${NEW_DATABASE_URL:-}" ]] && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${NEW_DATABASE_URL}|" "$ENV_FILE"
   [[ $DO_REDIS == 0 ]] && sed -i "s|^BEACN_BUS=redis|BEACN_BUS=memory|;s|^QUEUE_BACKEND=redis|QUEUE_BACKEND=memory|" "$ENV_FILE"
+  [[ -n "$PORT" ]] && sed -i "s|^BEACN_PORT=.*|BEACN_PORT=$PORT|" "$ENV_FILE"
   if [[ -n "$DOMAIN" ]]; then
     sed -i "s|^APP_URL=.*|APP_URL=https://$DOMAIN|;s|^CORS_ORIGINS=.*|CORS_ORIGINS=https://$DOMAIN|" "$ENV_FILE"
   fi
 fi
+# --port applies on every run (it is a runtime setting, not a one-time seed).
+[[ -n "$PORT" ]] && sed -i "s|^BEACN_PORT=.*|BEACN_PORT=$PORT|" "$ENV_FILE"
 chmod 0640 "$ENV_FILE"; chown root:"$APP_USER" "$ENV_FILE"
 
 # --------------------------------------------------------------------------
