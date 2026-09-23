@@ -30,7 +30,7 @@ from routes.web._kit import page
 __all__ = [
     "dashboard", "events", "event_detail", "topics", "connections",
     "tasks", "producers", "api_keys", "audit_log", "notifications", "settings",
-    "users",
+    "users", "playground",
 ]
 
 
@@ -144,6 +144,7 @@ async def topics(ctx: HttpContext) -> Any:
                 {
                     "id": t.id, "name": t.name, "visibility": t.visibility, "persist": t.persist,
                     "retention_hours": t.retention_hours, "description": t.description,
+                    "propagate_to": list(t.propagate_to or []),
                     "event_count": t.event_count, "subscriber_count": t.subscriber_count,
                     "last_event_at": _iso(t.last_event_at),
                 }
@@ -244,6 +245,21 @@ async def producers(ctx: HttpContext) -> Any:
                 }
                 for p in rows
             ],
+        },
+        ctx=ctx,
+    )
+
+
+@page("events.read")
+async def playground(ctx: HttpContext) -> Any:
+    environment = _env(ctx)
+    rows = await Producer.filter(environment=environment, status="active").order_by("name")
+    return await render(
+        "Playground",
+        {
+            "environment": environment,
+            "environments": list(ENVIRONMENTS),
+            "producers": [{"id": p.id, "name": p.name} for p in rows],
         },
         ctx=ctx,
     )

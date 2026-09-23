@@ -39,6 +39,15 @@ class Grant:
     topic_patterns: tuple[str, ...] = ()
     #: True for operator/admin realtime tokens minted from the control plane
     operator: bool = False
+    #: The Producer this connection speaks for, if any — set when the token
+    #: was minted for one (`mint_realtime_token(producer_id=...)`) or when
+    #: the grant came from that producer's own API key. Purely descriptive:
+    #: `authorize_subscription` never reads it, and it changes nothing about
+    #: whether a subscription is allowed. It exists so a `Connection` row —
+    #: and the dashboard Playground — can say *which* producer a connection
+    #: is testing or acting as, which nothing before this recorded even for
+    #: a connection opened with that producer's own real API key.
+    producer_id: str | None = None
 
     def has_scope(self, scope: str) -> bool:
         return scope in self.scopes or "*" in self.scopes or self.operator

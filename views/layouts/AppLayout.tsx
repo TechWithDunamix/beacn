@@ -23,6 +23,7 @@ import {
   IconLogout,
   IconMoon,
   IconOverview,
+  IconPlayground,
   IconProducer,
   IconPulse,
   IconSettings,
@@ -53,6 +54,7 @@ const NAVIGATION: NavGroup[] = [
       { label: 'Explorer', href: '/events', icon: IconPulse, permission: 'events.read' },
       { label: 'Topics', href: '/topics', icon: IconTopic, permission: 'topics.read' },
       { label: 'Connections', href: '/connections', icon: IconStream, permission: 'connections.read' },
+      { label: 'Playground', href: '/playground', icon: IconPlayground, permission: 'events.read' },
     ],
   },
   {

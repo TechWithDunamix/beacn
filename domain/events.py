@@ -45,6 +45,17 @@ _EVENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9][A-Za-z0-9_-]*)
 # Topic: a name, optionally namespaced with one colon (user:123, project:789).
 _TOPIC_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*(:[A-Za-z0-9][A-Za-z0-9_.:-]*)?$")
 
+
+def is_valid_topic_name(name: str) -> bool:
+    """Whether `name` could ever be an envelope's `topic` field.
+
+    Public (unlike `_TOPIC_RE`) because it now has a second caller —
+    `routes/api/control.py` validates a topic's `propagate_to` list against
+    the same rule a topic name is validated against on the way in, rather
+    than duplicating the pattern and risking the two drifting apart.
+    """
+    return isinstance(name, str) and bool(_TOPIC_RE.match(name)) and len(name) <= MAX_TOPIC_NAME
+
 KIND_EVENT = "event"
 KIND_TASK = "task"
 KIND_NOTIFICATION = "notification"

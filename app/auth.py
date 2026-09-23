@@ -94,6 +94,7 @@ def mint_realtime_token(
     scopes: list[str] | None = None,
     topic_patterns: list[str] | None = None,
     operator: bool = False,
+    producer_id: str | None = None,
     ttl_seconds: int | None = None,
 ) -> tuple[str, int]:
     """Return ``(jwt, expires_in_seconds)``."""
@@ -117,6 +118,8 @@ def mint_realtime_token(
         claims["scopes"] = list(scopes)
     if topic_patterns:
         claims["topics"] = list(topic_patterns)
+    if producer_id:
+        claims["pid"] = producer_id
     return jwt.encode(claims, config.secret_key), ttl
 
 
@@ -138,6 +141,7 @@ def grant_from_realtime_token(token: str) -> Grant:
         scopes=frozenset(claims.get("scopes") or ()),
         topic_patterns=tuple(claims.get("topics") or ()),
         operator=bool(claims.get("operator")),
+        producer_id=claims.get("pid"),
     )
 
 
@@ -154,6 +158,7 @@ async def grant_from_api_key_token(token: str) -> Grant:
         scopes=frozenset(scopes),
         topic_patterns=(),
         operator="system:read" in scopes,
+        producer_id=producer.id,
     )
 
 

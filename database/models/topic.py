@@ -32,6 +32,15 @@ class Topic(Model):
     #: whether matching events are written to the durable store at all
     persist = fields.BooleanField(default=True)
 
+    #: Other topic *names* (same environment; see `Subscription.topic` for
+    #: why this is a name, not a foreign key — this codebase's convention is
+    #: to reference a topic by `(environment, name)`, not its row) that every
+    #: event published here is also republished to, one level only — see
+    #: `app/services/ingest.py::ingest`'s `propagate` parameter for why a
+    #: chain never runs more than one hop deep regardless of what any target
+    #: topic's own list says.
+    propagate_to = fields.JSONField(default=list)
+
     #: denormalised, refreshed by the stats job
     event_count = fields.BigIntField(default=0)
     subscriber_count = fields.IntField(default=0)

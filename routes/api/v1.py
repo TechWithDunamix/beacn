@@ -348,6 +348,7 @@ async def issue_realtime_token(ctx: HttpContext) -> Any:
         scopes=[s for s in key.scope_list if s in ("system:read",)],
         topic_patterns=body.get("topic_patterns"),
         operator=key.has_scope("system:read"),
+        producer_id=producer.id,
         ttl_seconds=body.get("ttl_seconds"),
     )
     return ok(

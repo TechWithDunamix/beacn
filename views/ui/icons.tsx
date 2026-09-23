@@ -323,3 +323,9 @@ export const IconTask = svg(
     <path d="M8 12l3 3 5-6" />
   </>,
 )
+export const IconPlayground = svg(
+  <>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M10 9l5 3-5 3V9Z" />
+  </>,
+)

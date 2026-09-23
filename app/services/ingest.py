@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 from tortoise.exceptions import IntegrityError
@@ -29,6 +29,7 @@ from database.models import (
     Topic,
 )
 from domain.events import KIND_NOTIFICATION, KIND_TASK, Envelope
+from domain.ids import EVENT, new_id
 from realtime import get_realtime
 
 logger = logging.getLogger("beacn.ingest")
@@ -71,20 +72,45 @@ class IngestResult:
         }
 
 
-# in-process cache of which (env, topic) should be persisted — refreshed lazily
-_persist_cache: dict[tuple[str, str], bool] = {}
+# In-process cache of a topic row's own settings — persistence and its
+# propagate list both come from here, refreshed lazily. A topic with no row
+# persists (the default) and propagates nowhere.
+_topic_cache: dict[tuple[str, str], tuple[bool, tuple[str, ...]]] = {}
+
+
+async def _topic_settings(environment: str, topic: str) -> tuple[bool, tuple[str, ...]]:
+    key = (environment, topic)
+    if key not in _topic_cache:
+        row = await Topic.get_or_none(environment=environment, name=topic)
+        if row is None:
+            _topic_cache[key] = (True, ())
+        else:
+            # Never propagate to self, however the list was saved — a topic
+            # that names itself would otherwise get a second, redundant copy
+            # of every event it already has.
+            targets = tuple(t for t in (row.propagate_to or []) if t and t != topic)
+            _topic_cache[key] = (bool(row.persist), targets)
+    return _topic_cache[key]
 
 
 async def _should_persist(environment: str, topic: str) -> bool:
-    key = (environment, topic)
-    if key not in _persist_cache:
-        row = await Topic.get_or_none(environment=environment, name=topic)
-        _persist_cache[key] = True if row is None else bool(row.persist)
-    return _persist_cache[key]
+    persist, _ = await _topic_settings(environment, topic)
+    return persist
 
 
-def invalidate_persist_cache() -> None:
-    _persist_cache.clear()
+async def _propagate_targets(environment: str, topic: str) -> tuple[str, ...]:
+    _, targets = await _topic_settings(environment, topic)
+    return targets
+
+
+def invalidate_topic_cache() -> None:
+    """Forget every cached topic row. Call after any write to `Topic`.
+
+    Named for what it clears, not for the one field it used to be about —
+    `propagate_to` is exactly as stale as `persist` was if this is not called
+    after `topics_upsert` saves.
+    """
+    _topic_cache.clear()
 
 
 async def ingest(
@@ -92,7 +118,17 @@ async def ingest(
     *,
     persist: bool = True,
     fan_out: bool = True,
+    propagate: bool = True,
 ) -> IngestResult:
+    """Validate → dedupe → persist → fan out → propagate.
+
+    `propagate` is the one flag callers should not need to touch. It exists
+    so a propagated copy's own `ingest()` call (below) can pass `False` and
+    stop there — a topic is only ever expanded one level from the event a
+    producer actually sent, regardless of what its `propagate_to` list says.
+    Without that, `A -> B` and `B -> A` configured on two topics would fan
+    out forever; with it, the same event reaches both exactly once and stops.
+    """
     result = IngestResult()
     rt = get_realtime() if fan_out else None
 
@@ -130,6 +166,27 @@ async def ingest(
                 await rt.publish(env.environment, env.topic, wire)
             except Exception:  # noqa: BLE001
                 logger.exception("fanout failed for %s", env.id)
+
+        if propagate:
+            targets = await _propagate_targets(env.environment, env.topic)
+            if targets:
+                # A fresh id per target: each is its own row in the durable
+                # store (`events.id` is the primary key, one topic per row —
+                # see database/models/event.py), not the original event
+                # appearing twice. `idempotency_key` is cleared for the same
+                # reason `_dedupe` has to be — that check ignores topic, so
+                # keeping the key would make this copy look like a repeat of
+                # the event this function is still in the middle of
+                # accepting, and it would be silently dropped instead of
+                # propagated.
+                derived = [
+                    replace(env, id=new_id(EVENT), topic=target, idempotency_key=None)
+                    for target in targets
+                ]
+                try:
+                    await ingest(derived, persist=persist, fan_out=fan_out, propagate=False)
+                except Exception:  # noqa: BLE001
+                    logger.exception("propagation from %s failed for %s", env.topic, env.id)
 
         result.accepted.append(Accepted(id=env.id, event=env.event, topic=env.topic))
 

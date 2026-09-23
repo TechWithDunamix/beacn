@@ -209,6 +209,7 @@ class RealtimeSession:
                 principal_id=self.grant.user_id,
                 user_id=self.grant.user_id,
                 organization_id=self.grant.organization_id,
+                producer_id=self.grant.producer_id,
                 client=self.client,
                 ip=self.ip,
                 subscriptions=[],

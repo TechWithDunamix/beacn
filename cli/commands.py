@@ -181,15 +181,19 @@ class Serve(_Base):
 
 class Migrate(LocalCommand):
     name = "migrate"
-    help = "Create missing tables and seed the permission catalogue."
+    help = "Create missing tables, add missing columns, and seed the permission catalogue."
 
     async def run_async(self) -> int:
         from tortoise import Tortoise
 
         from app.authz import ensure_roles
+        from database.columns import sync_missing_columns
 
         await Tortoise.generate_schemas(safe=True)
+        added = await sync_missing_columns()
         await ensure_roles()
+        for column in added:
+            self.line(f"added column: {column}")
         self.line("Schema is up to date; roles seeded.")
         return 0
 

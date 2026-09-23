@@ -34,6 +34,7 @@ routes: list[Route] = [
     _r("/events/{event_id}", pages.event_detail, name="events.detail"),
     _r("/topics", pages.topics, name="topics"),
     _r("/connections", pages.connections, name="connections"),
+    _r("/playground", pages.playground, name="playground"),
     _r("/tasks", pages.tasks, name="tasks"),
     _r("/notifications", pages.notifications, name="notifications"),
     _r("/producers", pages.producers, name="producers"),

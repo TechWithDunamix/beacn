@@ -19,7 +19,7 @@ from sillo.responses import json
 from app.auth import mint_realtime_token
 from app.config import ENVIRONMENTS, config
 from app.services import audit, stats
-from app.services.ingest import invalidate_persist_cache
+from app.services.ingest import invalidate_topic_cache
 from database.models import (
     SCOPES,
     ApiKey,
@@ -33,7 +33,8 @@ from database.models import (
     User,
     UserSession,
 )
-from routes.api._common import client_ip, control_endpoint, ok, read_json
+from domain.events import is_valid_topic_name
+from routes.api._common import _error, client_ip, control_endpoint, ok, read_json
 
 router = Router(prefix="/api/control")
 
@@ -327,6 +328,7 @@ def _topic_json(t: Topic) -> dict:
         "persist": t.persist,
         "retention_hours": t.retention_hours,
         "description": t.description,
+        "propagate_to": list(t.propagate_to or []),
         "event_count": t.event_count,
         "subscriber_count": t.subscriber_count,
         "producer_count": t.producer_count,
@@ -344,6 +346,13 @@ async def topics_list(ctx: HttpContext) -> Any:
     return ok({"topics": [_topic_json(t) for t in rows]})
 
 
+#: How many other topics one topic may fan events out to. Not a technical
+#: limit — the recursion guard in `ingest()` makes even a cycle harmless —
+#: but a list a merchant cannot see the end of on the edit form is a list
+#: nobody can audit by reading it.
+MAX_PROPAGATE_TARGETS = 20
+
+
 @control_endpoint("topics.write")
 async def topics_upsert(ctx: HttpContext) -> Any:
     data = await read_json(ctx) or {}
@@ -351,6 +360,46 @@ async def topics_upsert(ctx: HttpContext) -> Any:
     environment = data.get("environment") or "development"
     if not name:
         return json({"error": {"code": "invalid", "message": "name is required"}}, status_code=422)
+
+    propagate_to = None
+    if "propagate_to" in data:
+        raw = data["propagate_to"] or []
+        if not isinstance(raw, list):
+            return json(
+                {"error": {"code": "invalid", "message": "propagate_to must be a list of topic names"}},
+                status_code=422,
+            )
+        # Ordered de-dup, self excluded — a topic naming itself would just be
+        # a second, redundant copy of every event it already has.
+        seen: set[str] = set()
+        propagate_to = []
+        for target in raw:
+            target = (target or "").strip() if isinstance(target, str) else ""
+            if not target or target == name or target in seen:
+                continue
+            if not is_valid_topic_name(target):
+                return json(
+                    {
+                        "error": {
+                            "code": "invalid",
+                            "message": f"'{target}' is not a valid topic name",
+                        }
+                    },
+                    status_code=422,
+                )
+            seen.add(target)
+            propagate_to.append(target)
+        if len(propagate_to) > MAX_PROPAGATE_TARGETS:
+            return json(
+                {
+                    "error": {
+                        "code": "invalid",
+                        "message": f"propagate_to holds at most {MAX_PROPAGATE_TARGETS} topics",
+                    }
+                },
+                status_code=422,
+            )
+
     row = await Topic.get_or_none(environment=environment, name=name)
     created = row is None
     if row is None:
@@ -364,9 +413,11 @@ async def topics_upsert(ctx: HttpContext) -> Any:
         row.persist = bool(data["persist"])
     if "retention_hours" in data:
         row.retention_hours = int(data["retention_hours"]) if data["retention_hours"] else None
+    if propagate_to is not None:
+        row.propagate_to = propagate_to
     row.created_by_id = row.created_by_id or getattr(ctx.state.actor, "pk", None)
     await row.save()
-    invalidate_persist_cache()
+    invalidate_topic_cache()
     await audit.record(
         action="topic.created" if created else "topic.updated", actor=ctx.state.actor, origin="cli",
         resource_type="topic", resource_id=row.id, resource_label=row.name,
@@ -677,6 +728,101 @@ async def operator_realtime_token(ctx: HttpContext) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Playground — connect and publish as a chosen Producer, for testing
+# ---------------------------------------------------------------------------
+#
+# The one place a dashboard *operator* (not a producer's own API key) can act
+# as a producer. Two separate concerns, two separate permissions:
+#
+# - `playground_token` (events.read) only lets someone *watch* — subscribe
+#   and see what arrives. `topic_patterns=("*",)` rather than trying to
+#   reconstruct a real key's scopes, which a producer may have several of
+#   with different scopes; this token is for looking, not for anything a
+#   narrower grant would need to gate.
+# - `playground_publish` (events.publish) is what actually moves something —
+#   gated separately, and audited, because unlike the token it has a
+#   real, lasting effect: a genuine event lands in that producer's history.
+#
+# Both go through the exact same paths a real connection/producer uses
+# (`mint_realtime_token`, `ingest()`) — nothing here is a separate "fake
+# publish" that could drift from what actually happens in production.
+
+#: Short-lived on purpose — this is a token for the tab that's open right
+#: now, not a credential anyone should still be holding an hour from now.
+PLAYGROUND_TOKEN_TTL = 600
+
+
+@control_endpoint("events.read")
+async def playground_token(ctx: HttpContext) -> Any:
+    from domain.errors import BeacnError, NotFoundError, ValidationError
+
+    data = await read_json(ctx) or {}
+    environment = data.get("environment") or "development"
+    producer_id = (data.get("producer_id") or "").strip()
+    try:
+        if not producer_id:
+            raise ValidationError("producer_id is required")
+
+        producer = await Producer.get_or_none(id=producer_id, environment=environment)
+        if producer is None:
+            raise NotFoundError("no producer with that id in this environment")
+    except BeacnError as exc:
+        return _error(exc, ctx)
+
+    token, ttl = mint_realtime_token(
+        environment=environment,
+        scopes=["events:read"],
+        topic_patterns=["*"],
+        producer_id=producer.id,
+        ttl_seconds=PLAYGROUND_TOKEN_TTL,
+    )
+    return ok({
+        "token": token,
+        "expires_in": ttl,
+        "environment": environment,
+        "producer": {"id": producer.id, "name": producer.name},
+    })
+
+
+@control_endpoint("events.publish")
+async def playground_publish(ctx: HttpContext) -> Any:
+    from app.services.ingest import ingest
+    from domain.events import Envelope, ProducerContext
+    from domain.errors import BeacnError, NotFoundError, ValidationError
+
+    data = await read_json(ctx) or {}
+    environment = data.get("environment") or "development"
+    producer_id = (data.get("producer_id") or "").strip()
+    try:
+        if not producer_id:
+            raise ValidationError("producer_id is required")
+
+        producer = await Producer.get_or_none(id=producer_id, environment=environment)
+        if producer is None:
+            raise NotFoundError("no producer with that id in this environment")
+
+        body = data.get("event")
+        if not isinstance(body, dict):
+            raise ValidationError("event must be an object — {event, topic, data, ...}")
+
+        envelope = Envelope.ingest(
+            body,
+            ProducerContext(producer=producer.name, producer_id=producer.id, environment=environment),
+        )
+    except BeacnError as exc:
+        return _error(exc, ctx)
+
+    result = await ingest([envelope])
+    await audit.record(
+        action="playground.published", actor=ctx.state.actor, origin="dashboard",
+        resource_type="producer", resource_id=producer.id, resource_label=producer.name,
+        environment=environment, after={"event": envelope.event, "topic": envelope.topic},
+        ip=client_ip(ctx),
+    )
+    return ok(result.to_dict(), status=201)
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 
@@ -723,6 +869,8 @@ for _r in (
     Route("/users/active", handler=users_set_active, methods=["POST"], name="control.users.active"),
     Route("/users/role", handler=users_set_role, methods=["POST"], name="control.users.role"),
     Route("/realtime/token", handler=operator_realtime_token, methods=["POST"], name="control.realtime.token"),
+    Route("/playground/token", handler=playground_token, methods=["POST"], name="control.playground.token"),
+    Route("/playground/publish", handler=playground_publish, methods=["POST"], name="control.playground.publish"),
     Route("/health", handler=health, methods=["GET"], name="control.health"),
 ):
     router.add_route(_r)

@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 PAGES = [
-    "/", "/events", "/topics", "/connections", "/tasks",
+    "/", "/events", "/topics", "/connections", "/tasks", "/playground",
     "/notifications", "/producers", "/api-keys", "/users", "/audit", "/settings",
 ]
 

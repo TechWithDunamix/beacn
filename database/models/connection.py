@@ -29,6 +29,11 @@ class Connection(Model):
     principal_id = fields.CharField(max_length=120, null=True)
     user_id = fields.CharField(max_length=200, null=True)
     organization_id = fields.CharField(max_length=200, null=True)
+    #: The Producer this connection speaks for, if its grant named one — see
+    #: `domain.topics.Grant.producer_id`. Null for an operator token minted
+    #: with no producer attached (e.g. the dashboard's own "view as operator"
+    #: realtime token), not an error case.
+    producer_id = fields.CharField(max_length=32, null=True, index=True)
     client = fields.CharField(max_length=200, null=True)  # User-Agent / SDK name
     ip = fields.CharField(max_length=64, null=True)
 
