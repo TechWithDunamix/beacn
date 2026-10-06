@@ -787,8 +787,8 @@ async def playground_token(ctx: HttpContext) -> Any:
 @control_endpoint("events.publish")
 async def playground_publish(ctx: HttpContext) -> Any:
     from app.services.ingest import ingest
-    from domain.events import Envelope, ProducerContext
     from domain.errors import BeacnError, NotFoundError, ValidationError
+    from domain.events import Envelope, ProducerContext
 
     data = await read_json(ctx) or {}
     environment = data.get("environment") or "development"

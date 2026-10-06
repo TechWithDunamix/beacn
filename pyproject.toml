@@ -39,6 +39,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The three extras the README, docs/DEPLOYMENT.md and deploy/install.sh use as
+# `.[server,redis,postgres]`. The packages themselves are core deps too — the
+# app boots in any environment without extra install steps — so these extras
+# re-declare them to keep those documented commands resolving without warnings.
+server = ["uvicorn[standard]>=0.30.0"]
+redis = ["redis>=5.0.0"]
+postgres = ["asyncpg>=0.29.0"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
