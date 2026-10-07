@@ -12,9 +12,9 @@ dependencies = [
     # Sillo is the whole framework layer: routing, middleware, sessions, auth,
     # RBAC, the Record ORM, migrations, the console, the queue, WebSockets.
     # `jwt` is required at runtime — app.auth mints realtime tokens with it.
-    "sillo-framework[cache,hashing-bcrypt,record,jwt]==0.3.2.dev1",
-    "sillo-inertia==0.1.0.dev1",
-    "sillo-wire==0.1.0.dev1",
+    "sillo-framework[cache,hashing-bcrypt,record,jwt]==1.0.1",
+    "sillo-inertia==1.0.0",
+    "sillo-wire==1.0.0",
     # ORM — models, migrations, and query layer. aiosqlite for local/dev SQLite,
     # asyncpg for production Postgres (both kept as core so the app boots in any
     # environment without extra install steps).
