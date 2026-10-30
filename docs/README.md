@@ -2,6 +2,8 @@
 
 | Document | Contents |
 |---|---|
+| [GETTING_STARTED.md](GETTING_STARTED.md) | Install, create credentials, publish, subscribe and connect Logsman |
+| [OPERATIONS.md](OPERATIONS.md) | Deployment checks, backups, replay recovery and troubleshooting |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System, database, bus, scaling, failure strategy, risks |
 | [EVENT_MODEL.md](EVENT_MODEL.md) | The envelope, required/optional/server fields, kinds, idempotency |
 | [REALTIME.md](REALTIME.md) | WebSocket + SSE protocol, authorization, backpressure, reconnect |
@@ -16,6 +18,8 @@
 | [PERFORMANCE.md](PERFORMANCE.md) | Benchmark harness, methodology, indicative numbers |
 
 ## Reading order
+
+Start with [Getting started](GETTING_STARTED.md) for a runnable local walkthrough.
 
 1. **ARCHITECTURE** for the shape of the system and the delivery-semantics
    contract.
@@ -36,5 +40,5 @@
   index, and it is read from the credential, never the request body.
 - **Exactly-once is not claimed.** At-most-once live + at-least-once replay +
   ULIDs for dedupe. Documented, tested, honest about retention gaps.
-- **The Python SDK's sync core is stdlib-only.** `pip install beacn` pulls in
-  nothing; async and WebSocket are opt-in extras.
+- **The Python SDK's sync core is stdlib-only.** The SDK module itself requires no
+  third-party packages; async and WebSocket are opt-in extras.

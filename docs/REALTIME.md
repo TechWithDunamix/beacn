@@ -16,6 +16,12 @@ SSE fallback (read-only, no client→server frames):
 GET /api/v1/sse?token=<...>&topics=a,b,c
 ```
 
+SSE authenticates the same grant and filters the requested topics. The initial
+`welcome` includes the allowed `topics`; unauthorized requested topics are omitted.
+The route is live-only: it does not consume `Last-Event-ID` or perform automatic
+history replay. Use the REST replay endpoint or the WebSocket replay frame for
+missed events. Do not expose raw service API keys in browser code or access logs.
+
 ---
 
 ## Frames
@@ -89,5 +95,6 @@ A cross-environment subscribe is always refused.
 - **Graceful shutdown.** On `SIGTERM` the instance stops accepting, sends close
   `1001` to every socket, flushes writer tasks and drains the bus.
 - **Reconnect + replay.** On reconnect, `replay` each topic `since` the last
-  `id` you processed. If `truncated` is `true`, retention removed events between
-  your cursor and `earliest_available` — you have a gap, handle it.
+  `id` you processed. `truncated` can indicate either a retention gap or more results than the
+  configured replay limit. Follow `next_since` for remaining results and compare
+  the cursor with retained history to assess a gap. See [Operations](OPERATIONS.md).

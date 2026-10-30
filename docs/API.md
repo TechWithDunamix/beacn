@@ -61,8 +61,9 @@ Body: `{ "topic": "...", "since": "evt_…" | null, "limit": 1000 }`.
               "earliest_available": "evt_…", "next_since": null } }
 ```
 
-`truncated: true` means retention removed events between `since` and
-`earliest_available` — you have a gap.
+`truncated: true` means either the cursor predates the oldest retained event
+or more results exist than fit in this page. Follow non-null `next_since` to
+continue; compare `since` with `earliest_available` to assess a retention gap.
 
 ---
 
@@ -104,5 +105,6 @@ and never again.
 
 ## `/health` and `/metrics`
 
-- `GET /health` — checks the database and the bus; `200` healthy, `503` not.
+- `GET /health` — reports database and bus state; database failure returns `503`. A degraded
+  bus alone can still return `200`; verify cross-instance delivery separately.
 - `GET /metrics` — Prometheus text exposition (see [OBSERVABILITY.md](OBSERVABILITY.md)).

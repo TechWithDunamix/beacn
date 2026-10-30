@@ -75,7 +75,11 @@ backoff; ingestion and persistence are unaffected.
 ## Docker
 
 `Dockerfile` builds the frontend and installs `beacn[server,redis,postgres]`.
-`docker-compose.yml` brings up BEACN + Postgres + Redis.
+`docker-compose.yml` brings up BEACN + Postgres + Redis using development
+credentials. Set the shared `APP_ENV=development` for local use (the committed
+production label conflicts with its insecure-cookie setting). On one host, use `docker compose up --build --scale web=1`: the
+checked-in two replicas cannot both bind host port 8000. See
+[Operations](OPERATIONS.md) for deployment checks and recovery.
 
 ## Health & readiness
 

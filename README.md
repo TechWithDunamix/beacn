@@ -16,7 +16,7 @@ layer on one generic event model.
  Django ─┐                                            ┌─ browser app
  Celery ─┤   POST /api/v1/events (API key, scoped)    │
  cron   ─┼──────────────►  BEACN  ──────────────►  WS /realtime
- Go svc ─┤   ingest→validate→dedupe→persist→fanout   │  SSE /sse
+ Go svc ─┤   ingest→validate→dedupe→persist→fanout   │  SSE /api/v1/sse
  …       ─┘        (bus: in-process | Redis)          └─ services
 ```
 
@@ -49,9 +49,15 @@ RBAC, Record ORM, migrations, console, queue and WebSocket stack — plus
 
 ## Quick start
 
+For a complete walkthrough, including dashboard assets, producer keys and a
+Logsman-compatible event, see [Getting started](docs/GETTING_STARTED.md).
+For backups, recovery and troubleshooting, see [Operations](docs/OPERATIONS.md).
+
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[server,dev]"          # or: pip install -e ".[server,redis,postgres]"
+cp .env.example .env                   # remove inline comments; set a fresh SECRET_KEY
+npm ci && npm run build               # set VITE_DEV=false in .env
 
 beacn migrate                                    # create tables, seed the RBAC catalogue
 beacn user create you@example.com --role Admin --admin   # the first operator (prompts for a password)
@@ -72,6 +78,7 @@ Register a producer and issue a key (via the CLI, once you `beacn login`), or in
 the dashboard under **Producers** → **API keys**. Then:
 
 ```python
+# Make sdk/python/beacn.py importable, e.g. PYTHONPATH=sdk/python from this checkout.
 from beacn import Beacn
 
 beacn = Beacn(url="http://localhost:8000", api_key="bk_...")
@@ -84,6 +91,7 @@ for event in beacn.subscribe("payments"):     # SSE, stdlib only
 ```bash
 curl -XPOST http://localhost:8000/api/v1/events \
   -H "Authorization: Bearer bk_..." \
+  -H "Content-Type: application/json" \
   -d '{"event":"deployment.completed","topic":"deployments","data":{"status":"success"}}'
 ```
 
@@ -197,7 +205,9 @@ Then put it behind TLS with [`deploy/Caddyfile.example`](deploy/Caddyfile.exampl
 register a producer and issue an API key in the dashboard, and publish your
 first event. Day-two operations, unit details and uninstall steps:
 [`deploy/README.md`](deploy/README.md). Prefer containers?
-`docker compose up --build` brings up BEACN + PostgreSQL + Redis.
+`docker compose up --build --scale web=1` brings up BEACN + PostgreSQL + Redis
+on one host after adjusting its development settings; see
+[Compose prerequisites](docs/OPERATIONS.md#deployment-choices).
 
 ---
 
